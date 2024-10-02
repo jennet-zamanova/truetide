@@ -2,8 +2,8 @@ import { ObjectId } from "mongodb";
 
 import { Router, getExpressRouter } from "./framework/router";
 
-import { Authing, Friending, Posting, Sessioning } from "./app";
-import { PostOptions } from "./concepts/posting";
+import { Authing, Citing, DualViewing, Friending, Labeling, Posting, Sessioning } from "./app";
+import { PostDoc, PostOptions } from "./concepts/posting";
 import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
 
@@ -70,6 +70,9 @@ class Routes {
     return { msg: "Logged out!" };
   }
 
+  /**
+   * Posting routes
+   */
   @Router.get("/posts")
   @Router.validate(z.object({ author: z.string().optional() }))
   async getPosts(author?: string) {
@@ -105,6 +108,71 @@ class Routes {
     await Posting.assertAuthorIsUser(oid, user);
     return Posting.delete(oid);
   }
+
+  /**
+   * Citing routes
+   */
+
+  @Router.get("/citations")
+  @Router.validate(z.object({ content: z.string() }))
+  async getCitations(content: string) {
+    const oid = new ObjectId(content);
+    const citations = (await Citing.getCitations(oid)).citations;
+    return citations;
+  }
+
+  @Router.post("/citations")
+  async addCitations(session: SessionDoc, id: string, links: string[]) {
+    const user = Sessioning.getUser(session);
+    const oid = new ObjectId(id);
+    await Posting.assertAuthorIsUser(oid, user);
+    const urls = links.map((link: string) => new URL(link));
+    return await Citing.addCitations(oid, urls);
+  }
+
+  // do we need separate route to open a link?
+
+  // TODO: depends on how we sync posting?
+  async getSuggestedCitationsContent(id: string) {
+    const oid = new ObjectId(id);
+    const text = await Posting.getContentText(oid);
+    return await Citing.createCitations(text);
+  }
+
+  async getSuggestedCitationsFiles(id: string) {
+    const oid = new ObjectId(id);
+    const text = await Posting.getFileText(oid);
+    return await Citing.createCitations(text);
+  }
+
+  /**
+   * Labeling routes
+   */
+
+  // get the "feed"
+  @Router.get("/posts/:topic")
+  async getPostsOnTopic(topic: String) {
+    let posts: PostDoc[] = [];
+    const controversialRating: Number = await DualViewing.getRating(topic);
+    const TRESHOLD: Number = 0.7;
+    if (controversialRating > TRESHOLD) {
+      const controversialContent = await DualViewing.getOpposingItems(topic);
+      const contentPosts = await Posting.getPostsSubset(controversialContent);
+      posts.concat(contentPosts);
+    } else {
+      const labels = await DualViewing.getTagsForTopic(topic);
+      for (const label of labels) {
+        const contents = await Labeling.getItemsWithTag(label);
+        const contentPosts = await Posting.getPostsSubset(contents);
+        posts.concat(contentPosts);
+      }
+    }
+
+    // select randomly keys
+    // select randomly corresponding opposing items
+  }
+
+  // get next item
 
   @Router.get("/friends")
   async getFriends(session: SessionDoc) {

@@ -36,6 +36,21 @@ export default class PostingConcept {
     return await this.posts.readMany({}, { sort: { _id: -1 } });
   }
 
+  async getPost(_id: ObjectId) {
+    // Returns specific post!
+    return await this.posts.readOne({ _id });
+  }
+
+  async getPostsSubset(ids: ObjectId[]): Promise<PostDoc[]> {
+    const optionalContentPosts = await Promise.all(
+      ids.map(async (content: ObjectId) => {
+        return await this.getPost(content);
+      }),
+    );
+    const contentPosts = optionalContentPosts.filter((contentPost) => contentPost !== null);
+    return contentPosts;
+  }
+
   async getByAuthor(author: ObjectId) {
     return await this.posts.readMany({ author });
   }
@@ -50,6 +65,32 @@ export default class PostingConcept {
   async delete(_id: ObjectId) {
     await this.posts.deleteOne({ _id });
     return { msg: "Post deleted successfully!" };
+  }
+
+  /**
+   * Extracts text out of video content posted previously
+   * @param _id video content id
+   * @returns the text that was spoken in the content
+   */
+  async getContentText(_id: ObjectId) {
+    const content = await this.posts.readOne({ _id });
+    // TODO: somehow get mp3
+    // somehow get text
+    const text = "";
+    return text;
+  }
+
+  /**
+   * Extracts text out of video file
+   * @param file some video file
+   * @returns text spoken in the file
+   */
+  async getFileText(file: ObjectId) {
+    const content = await this.posts.readOne({ file });
+    // TODO: somehow get mp3
+    // somehow get text
+    const text = "";
+    return text;
   }
 
   async assertAuthorIsUser(_id: ObjectId, user: ObjectId) {
