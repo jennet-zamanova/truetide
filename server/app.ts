@@ -1,6 +1,5 @@
 import AuthenticatingConcept from "./concepts/authenticating";
 import CitingConcept from "./concepts/citing";
-import DualViewingConcept from "./concepts/dualViewing";
 import FriendingConcept from "./concepts/friending";
 import LabelingConcept from "./concepts/labeling";
 import PostingConcept from "./concepts/posting";
@@ -14,4 +13,3 @@ export const Posting = new PostingConcept("posts");
 export const Friending = new FriendingConcept("friends");
 export const Labeling = new LabelingConcept("postLabel");
 export const Citing = new CitingConcept("postCitations");
-export const DualViewing = new DualViewingConcept("controversialTopics");
