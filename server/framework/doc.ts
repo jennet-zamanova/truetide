@@ -8,6 +8,7 @@ import {
   Filter,
   FindOneAndUpdateOptions,
   FindOptions,
+  GridFSBucket,
   ObjectId,
   OptionalUnlessRequiredId,
   ReplaceOptions,
@@ -32,12 +33,17 @@ export type WithoutBase<T extends BaseDoc> = Omit<T, keyof BaseDoc>;
  */
 export default class DocCollection<Schema extends BaseDoc> {
   public readonly collection: Collection<Schema>;
+  public readonly bucket: GridFSBucket;
   private static collectionNames: Set<string> = new Set();
+  private fs = require("fs");
 
   constructor(public readonly name: string) {
     if (DocCollection.collectionNames.has(name)) {
       throw new Error(`Collection '${name}' already exists!`);
     }
+    this.bucket = new GridFSBucket(db, {
+      bucketName: name + "videos",
+    });
     this.collection = db.collection(name);
   }
 
@@ -153,4 +159,36 @@ export default class DocCollection<Schema extends BaseDoc> {
   /*
    * You may wish to add more methods, e.g. using other MongoDB operations!
    */
+  async uploadVideo(filePath: string): Promise<ObjectId> {
+    // const safe = this.withoutInternal(item);
+    // safe.dateCreated = new Date();
+    // safe.dateUpdated = new Date();
+    const uploadStream = this.bucket.openUploadStream(filePath);
+    // const fs = require("fs");
+    let _id = new ObjectId();
+    this.fs
+      .createReadStream(filePath)
+      .pipe(uploadStream)
+      .on("error", (error: Error) => {
+        console.error("Error uploading video:", error);
+      })
+      .on("finish", () => {
+        console.log("Video uploaded successfully");
+        _id = uploadStream.id;
+      });
+    return _id;
+  }
+
+  async downloadVideo(_id: ObjectId, outputPath: string): Promise<string> {
+    await this.bucket
+      .openDownloadStream(_id)
+      .pipe(this.fs.createWriteStream(outputPath))
+      .on("error", (error: Error) => {
+        console.error("Error downloading video:", error);
+      })
+      .on("finish", () => {
+        console.log("Video downloaded successfully");
+      });
+    return outputPath;
+  }
 }

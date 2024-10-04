@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 
 import { Router, getExpressRouter } from "./framework/router";
 
-import { Authing, Friending, Posting, Sessioning } from "./app";
+import { Authing, Citing, Posting, Sessioning } from "./app";
 import { PostOptions } from "./concepts/posting";
 import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
@@ -70,6 +70,9 @@ class Routes {
     return { msg: "Logged out!" };
   }
 
+  /**
+   * Posting routes
+   */
   @Router.get("/posts")
   @Router.validate(z.object({ author: z.string().optional() }))
   async getPosts(author?: string) {
@@ -106,52 +109,123 @@ class Routes {
     return Posting.delete(oid);
   }
 
-  @Router.get("/friends")
-  async getFriends(session: SessionDoc) {
-    const user = Sessioning.getUser(session);
-    return await Authing.idsToUsernames(await Friending.getFriends(user));
+  /**
+   * Citing routes
+   */
+
+  @Router.get("/citations")
+  @Router.validate(z.object({ content: z.string() }))
+  async getCitations(postId: string) {
+    const oid = new ObjectId(postId);
+    const citations = (await Citing.getCitations(oid)).citations;
+    return citations;
   }
 
-  @Router.delete("/friends/:friend")
-  async removeFriend(session: SessionDoc, friend: string) {
+  @Router.post("/citations")
+  async addCitations(session: SessionDoc, id: string, links: string[]) {
     const user = Sessioning.getUser(session);
-    const friendOid = (await Authing.getUserByUsername(friend))._id;
-    return await Friending.removeFriend(user, friendOid);
+    const oid = new ObjectId(id);
+    await Posting.assertAuthorIsUser(oid, user);
+    const urls = links.map((link: string) => new URL(link));
+    return await Citing.addCitations(oid, urls);
   }
 
-  @Router.get("/friend/requests")
-  async getRequests(session: SessionDoc) {
-    const user = Sessioning.getUser(session);
-    return await Responses.friendRequests(await Friending.getRequests(user));
+  // do we need separate route to open a link?
+
+  // TODO: depends on how we sync posting?
+  async getSuggestedCitationsContent(filePath: string) {
+    const text = await Posting.getFileText(filePath);
+    return await Citing.createCitations(text);
   }
 
-  @Router.post("/friend/requests/:to")
-  async sendFriendRequest(session: SessionDoc, to: string) {
-    const user = Sessioning.getUser(session);
-    const toOid = (await Authing.getUserByUsername(to))._id;
-    return await Friending.sendRequest(user, toOid);
+  /**
+   * Labeling routes
+   */
+
+  // get the "feed"
+
+  // get all labels associated with topic
+  @Router.get("/labels/:topic")
+  async getTagsOnTopic(topic: String) {
+    // let posts: PostDoc[] = [];
+    // const controversialRating: Number = await DualViewing.getRating(topic);
+    // const TRESHOLD: Number = 0.7;
+    // if (controversialRating > TRESHOLD) {
+    //   const controversialContent = await DualViewing.getOpposingItems(topic);
+    //   const contentPosts = await Posting.getPostsSubset(controversialContent);
+    //   posts.concat(contentPosts);
+    // } else {
+    //   const labels = await DualViewing.getTagsForTopic(topic);
+    //   for (const label of labels) {
+    //     const contents = await Labeling.getItemsWithTag(label);
+    //     const contentPosts = await Posting.getPostsSubset(contents);
+    //     posts.concat(contentPosts);
+    //   }
+    // }
+    // select randomly keys
+    // select randomly corresponding opposing items
   }
 
-  @Router.delete("/friend/requests/:to")
-  async removeFriendRequest(session: SessionDoc, to: string) {
-    const user = Sessioning.getUser(session);
-    const toOid = (await Authing.getUserByUsername(to))._id;
-    return await Friending.removeRequest(user, toOid);
-  }
+  // get opposing posts on a topic
+  @Router.get("/posts/:topic")
+  async getPairedPostsOnTopic(topic: String) {}
 
-  @Router.put("/friend/accept/:from")
-  async acceptFriendRequest(session: SessionDoc, from: string) {
-    const user = Sessioning.getUser(session);
-    const fromOid = (await Authing.getUserByUsername(from))._id;
-    return await Friending.acceptRequest(fromOid, user);
-  }
+  // add labels
+  @Router.post("/labels")
+  async addLabels(labels: String[]) {}
 
-  @Router.put("/friend/reject/:from")
-  async rejectFriendRequest(session: SessionDoc, from: string) {
-    const user = Sessioning.getUser(session);
-    const fromOid = (await Authing.getUserByUsername(from))._id;
-    return await Friending.rejectRequest(fromOid, user);
-  }
+  // get all labels
+  @Router.get("/labels")
+  async getLabels() {}
+
+  // do not need friending concept
+
+  // @Router.get("/friends")
+  // async getFriends(session: SessionDoc) {
+  //   const user = Sessioning.getUser(session);
+  //   return await Authing.idsToUsernames(await Friending.getFriends(user));
+  // }
+
+  // @Router.delete("/friends/:friend")
+  // async removeFriend(session: SessionDoc, friend: string) {
+  //   const user = Sessioning.getUser(session);
+  //   const friendOid = (await Authing.getUserByUsername(friend))._id;
+  //   return await Friending.removeFriend(user, friendOid);
+  // }
+
+  // @Router.get("/friend/requests")
+  // async getRequests(session: SessionDoc) {
+  //   const user = Sessioning.getUser(session);
+  //   return await Responses.friendRequests(await Friending.getRequests(user));
+  // }
+
+  // @Router.post("/friend/requests/:to")
+  // async sendFriendRequest(session: SessionDoc, to: string) {
+  //   const user = Sessioning.getUser(session);
+  //   const toOid = (await Authing.getUserByUsername(to))._id;
+  //   return await Friending.sendRequest(user, toOid);
+  // }
+
+  // @Router.delete("/friend/requests/:to")
+  // async removeFriendRequest(session: SessionDoc, to: string) {
+  //   const user = Sessioning.getUser(session);
+  //   const toOid = (await Authing.getUserByUsername(to))._id;
+  //   return await Friending.removeRequest(user, toOid);
+  // }
+
+  // @Router.put("/friend/accept/:from")
+  // async acceptFriendRequest(session: SessionDoc, from: string) {
+  //   const user = Sessioning.getUser(session);
+  //   const fromOid = (await Authing.getUserByUsername(from))._id;
+  //   return await Friending.acceptRequest(fromOid, user);
+  // }
+
+  // @Router.put("/friend/reject/:from")
+  // async rejectFriendRequest(session: SessionDoc, from: string) {
+  //   const user = Sessioning.getUser(session);
+  //   const fromOid = (await Authing.getUserByUsername(from))._id;
+  //   return await Friending.rejectRequest(fromOid, user);
+  // }
 }
 
 /** The web app. */
