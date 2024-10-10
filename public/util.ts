@@ -15,6 +15,30 @@ type Operation = {
  */
 const operations: Operation[] = [
   {
+    name: "Suggest Citations",
+    endpoint: "/api/citations/:filepath/suggestions",
+    method: "GET",
+    fields: { filepath: "input" },
+  },
+  {
+    name: "Add Citations for Post",
+    endpoint: "/api/posts/:postId/citations",
+    method: "POST",
+    fields: { postId: "input" },
+  },
+  {
+    name: "Get Citations for Post",
+    endpoint: "/api/posts/:postId/citations",
+    method: "GET",
+    fields: { postId: "input" },
+  },
+  {
+    name: "Get all Posts on Topic",
+    endpoint: "/api/posts/:topic",
+    method: "GET",
+    fields: { topic: "input" },
+  },
+  {
     name: "Get Session User (logged in user)",
     endpoint: "/api/session",
     method: "GET",
@@ -66,7 +90,7 @@ const operations: Operation[] = [
     name: "Create Post",
     endpoint: "/api/posts",
     method: "POST",
-    fields: { content: "input" },
+    fields: { content: "input", citations: "input", labels: "input" },
   },
   {
     name: "Update Post",

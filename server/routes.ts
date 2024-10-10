@@ -2,11 +2,14 @@ import { ObjectId } from "mongodb";
 
 import { Router, getExpressRouter } from "./framework/router";
 
-import { Authing, Citing, Posting, Sessioning } from "./app";
+import { Authing, Citing, Labeling, Posting, Sessioning } from "./app";
 import { PostOptions } from "./concepts/posting";
 import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
 
+// import thesaurus from "powerthesaurus-api";
+
+import nlp from "compromise";
 import { z } from "zod";
 
 /**
@@ -17,6 +20,12 @@ class Routes {
 
   @Router.get("/session")
   async getSessionUser(session: SessionDoc) {
+    const doc = nlp("Chocolate Chip Cookies");
+    console.log(doc.topics().out("array")); // Extract topics (basic entities)
+    let doc1 = nlp("she sells seashells by the seashore.");
+    doc1.verbs().toPastTense();
+    console.log(doc1.text());
+    console.log(doc1.topics().json());
     const user = Sessioning.getUser(session);
     return await Authing.getUserById(user);
   }
@@ -86,10 +95,27 @@ class Routes {
     return Responses.posts(posts);
   }
 
+  /**
+   * Update all MONGODB collections to add item and associated values
+   * @param session
+   * @param content path to a video file
+   * @param citations comma separated values
+   * @param labels comma separated values
+   * @param options
+   * @returns
+   */
   @Router.post("/posts")
-  async createPost(session: SessionDoc, content: string, options?: PostOptions) {
+  async createPost(session: SessionDoc, content: string, citations: string, labels: string, options?: PostOptions) {
     const user = Sessioning.getUser(session);
     const created = await Posting.create(user, content, options);
+    const _id = created.post?._id;
+    if (_id !== undefined) {
+      await Citing.addCitations(
+        _id,
+        citations.split(", ").map((citation) => new URL(citation)),
+      );
+      await Labeling.addLabels(_id, labels.split(", "));
+    }
     return { msg: created.msg, post: await Responses.post(created.post) };
   }
 
@@ -106,6 +132,7 @@ class Routes {
     const user = Sessioning.getUser(session);
     const oid = new ObjectId(id);
     await Posting.assertAuthorIsUser(oid, user);
+    await Citing.deleteAllCitationsForContent(oid);
     return Posting.delete(oid);
   }
 
@@ -113,15 +140,14 @@ class Routes {
    * Citing routes
    */
 
-  @Router.get("/citations")
-  @Router.validate(z.object({ content: z.string() }))
+  @Router.get("/api/posts/:postId/citations")
   async getCitations(postId: string) {
     const oid = new ObjectId(postId);
     const citations = (await Citing.getCitations(oid)).citations;
     return citations;
   }
 
-  @Router.post("/citations")
+  @Router.post("/api/posts/:postId/citations")
   async addCitations(session: SessionDoc, id: string, links: string[]) {
     const user = Sessioning.getUser(session);
     const oid = new ObjectId(id);
@@ -133,9 +159,11 @@ class Routes {
   // do we need separate route to open a link?
 
   // TODO: depends on how we sync posting?
+  @Router.get("/api/citations/:filepath/suggestions")
+  // @Router.validate(z.object({ content: z.string() }))
   async getSuggestedCitationsContent(filePath: string) {
     const text = await Posting.getFileText(filePath);
-    return await Citing.createCitations(text);
+    return await Citing.createCitationsGemini(text);
   }
 
   /**
@@ -144,39 +172,45 @@ class Routes {
 
   // get the "feed"
 
-  // get all labels associated with topic
-  @Router.get("/labels/:topic")
-  async getTagsOnTopic(topic: String) {
-    // let posts: PostDoc[] = [];
-    // const controversialRating: Number = await DualViewing.getRating(topic);
-    // const TRESHOLD: Number = 0.7;
-    // if (controversialRating > TRESHOLD) {
-    //   const controversialContent = await DualViewing.getOpposingItems(topic);
-    //   const contentPosts = await Posting.getPostsSubset(controversialContent);
-    //   posts.concat(contentPosts);
-    // } else {
-    //   const labels = await DualViewing.getTagsForTopic(topic);
-    //   for (const label of labels) {
-    //     const contents = await Labeling.getItemsWithTag(label);
-    //     const contentPosts = await Posting.getPostsSubset(contents);
-    //     posts.concat(contentPosts);
-    //   }
-    // }
-    // select randomly keys
-    // select randomly corresponding opposing items
+  // get opposing posts on a topic
+  @Router.get("/api/posts/:topic")
+  async getPairedPostsOnTopic(topic: String) {
+    Labeling.getOpposingItems(topic);
   }
 
-  // get opposing posts on a topic
-  @Router.get("/posts/:topic")
-  async getPairedPostsOnTopic(topic: String) {}
+  // temp
+  @Router.get("/api/categories/:label")
+  async getCategories(label: string) {
+    var thesaurus = require("powerthesaurus-api");
+    // Callbacks:
+    // try {
+    //   const res = await thesaurus("car");
+    //   console.log(res);
+    // } catch (err) {
+    //   console.error(err);
+    // }
+    thesaurus(label, function (err: any, res: any) {
+      if (err) throw err;
+      console.log(`here the response for ${label}`, res);
+    });
 
-  // add labels
-  @Router.post("/labels")
-  async addLabels(labels: String[]) {}
+    // thesaurus("blue", "antonyms").then(
+    //   (res: any) => {
+    //     console.log(res);
+    //   },
+    //   (err: any) => {
+    //     throw err;
+    //   },
+    // );
+  }
 
-  // get all labels
-  @Router.get("/labels")
-  async getLabels() {}
+  // // add labels
+  // @Router.post("/labels")
+  // async addLabels(labels: String[]) {}
+
+  // // get all labels
+  // @Router.get("/labels")
+  // async getLabels() {}
 
   // do not need friending concept
 
@@ -225,6 +259,28 @@ class Routes {
   //   const user = Sessioning.getUser(session);
   //   const fromOid = (await Authing.getUserByUsername(from))._id;
   //   return await Friending.rejectRequest(fromOid, user);
+  // }
+
+  // get all labels associated with topic
+  // @Router.get("/labels/:topic")
+  // async getTagsOnTopic(topic: String) {
+  //   // let posts: PostDoc[] = [];
+  //   // const controversialRating: Number = await DualViewing.getRating(topic);
+  //   // const TRESHOLD: Number = 0.7;
+  //   // if (controversialRating > TRESHOLD) {
+  //   //   const controversialContent = await DualViewing.getOpposingItems(topic);
+  //   //   const contentPosts = await Posting.getPostsSubset(controversialContent);
+  //   //   posts.concat(contentPosts);
+  //   // } else {
+  //   //   const labels = await DualViewing.getTagsForTopic(topic);
+  //   //   for (const label of labels) {
+  //   //     const contents = await Labeling.getItemsWithTag(label);
+  //   //     const contentPosts = await Posting.getPostsSubset(contents);
+  //   //     posts.concat(contentPosts);
+  //   //   }
+  //   // }
+  //   // select randomly keys
+  //   // select randomly corresponding opposing items
   // }
 }
 

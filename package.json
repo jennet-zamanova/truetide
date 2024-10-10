@@ -31,7 +31,9 @@
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.10.0",
+    "@google/generative-ai": "^0.21.0",
     "assemblyai": "^4.7.0",
+    "compromise": "^14.14.1",
     "connect-mongo": "^5.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -41,6 +43,7 @@
     "mongodb": "^6.9.0",
     "morgan": "^1.10.0",
     "openai": "^4.67.0",
+    "powerthesaurus-api": "^2.0.3",
     "reflect-metadata": "^0.1.13",
     "zod": "^3.23.8"
   },
