@@ -1,4 +1,4 @@
-import { Authing } from "./app";
+import { Authing, Posting } from "./app";
 import { AlreadyFriendsError, FriendNotFoundError, FriendRequestAlreadyExistsError, FriendRequestDoc, FriendRequestNotFoundError } from "./concepts/friending";
 import { PostAuthorNotMatchError, PostDoc } from "./concepts/posting";
 import { Router } from "./framework/router";
@@ -25,6 +25,15 @@ export default class Responses {
   static async posts(posts: PostDoc[]) {
     const authors = await Authing.idsToUsernames(posts.map((post) => post.author));
     return posts.map((post, i) => ({ ...post, author: authors[i] }));
+  }
+
+  /**
+   * Same as {@link posts} but wih videos downloaded->probably bad
+   */
+  static async postsWithvideos(posts: PostDoc[]) {
+    const authors = await Authing.idsToUsernames(posts.map((post) => post.author));
+    const contents = await Posting.idsToVideos(posts.map((post) => post.content));
+    return posts.map((post, i) => ({ ...post, author: authors[i], videoContent: contents[i] }));
   }
 
   /**

@@ -45,59 +45,37 @@ export default class LabelingConcept {
     // find category
     const category = await this.findCategoryGemini(labels);
     // add all items with corresponding labels
-    const labelIds = await this.updateLabels(labels, item);
+    const labelIds = await this.addItemToLabels(labels, item);
     // add labels to category
     await this.addLabelsForCategory(category, labelIds);
     return { msg: `Labels ${labels} successfully added!` };
+  }
+
+  async getLabelsForItem(item: ObjectId): Promise<string[]> {
+    return (await this.labels.readMany({ items: item })).map((labelDoc) => labelDoc.label);
+  }
+
+  async updateLabelsForItem(item: ObjectId, labels: string[]) {
+    const current_labels = await this.getLabelsForItem(item);
+    const add_labels = labels.filter((label) => !current_labels.includes(label));
+    const remove_labels = current_labels.filter((label) => !labels.includes(label));
+    await this.addLabelsForItem(item, add_labels);
+    await this.removeItemFromLabel(item, { label: { $in: remove_labels } });
+    return { msg: "Labels successfully updated!" };
   }
 
   /**
    * remove labels from items and respective categories if there are no other items
    * @param item labeled item
    */
-  async removeItemFromLabel(item: ObjectId) {
-    await this.labels.updateMany({}, { $pull: { items: item } });
+  async removeItemFromLabel(item: ObjectId, labels: { label: { $in: string[] } } | {} = {}) {
+    await this.labels.updateMany(labels, { $pull: { items: item } });
     const labelDocs = await this.labels.readMany({ labels: { $size: 0 } });
     for (const label of labelDocs) {
       await this.categories.updateMany({}, { $pull: { labels: label._id } });
       await this.categories.deleteMany({ labels: { $size: 0 } });
     }
     await this.labels.deleteMany({ items: { $size: 0 } });
-  }
-
-  /**
-   * Get all items with given tag
-   * @param tag a label
-   * @returns all item ids with that label
-   * @throws error if there are no items with a given tag
-   */
-  async getItemsWithLabel(label: string): Promise<ObjectId[]> {
-    const labelDocs = await this.labels.readMany({ label });
-    if (labelDocs.length === 0) {
-      throw new NotFoundError(`No items have label ${label}!`);
-    }
-    const items = labelDocs.reduce((accumulator, curLabelDoc) => {
-      return accumulator.concat(curLabelDoc.items);
-    }, labelDocs[0].items);
-    return items;
-  }
-
-  /**
-   * Get all labels within a field
-   * @param category any
-   * @returns all item ids within the category
-   * @throws error if there are no labels in a given category, or category is not allowed
-   */
-  async getLabelsInCategory(category: string): Promise<ObjectId[]> {
-    assert(category in this.allowedCategories, `expected one of ${this.allowedCategories} but got category ${category}`);
-    const categoryDocs = await this.categories.readMany({ category: category });
-    if (categoryDocs.length === 0) {
-      throw new NotFoundError(`No items are in category ${category}!`);
-    }
-    const labels = categoryDocs.reduce((accumulator, curCategoryDoc) => {
-      return accumulator.concat(curCategoryDoc.labels);
-    }, categoryDocs[0].labels);
-    return labels;
   }
 
   /**
@@ -131,12 +109,47 @@ export default class LabelingConcept {
   }
 
   /**
+   * Get all items with given tag
+   * @param tag a label
+   * @returns all item ids with that label
+   * @throws error if there are no items with a given tag
+   */
+  private async getItemsWithLabel(label: string): Promise<ObjectId[]> {
+    const labelDocs = await this.labels.readMany({ label });
+    if (labelDocs.length === 0) {
+      throw new NotFoundError(`No items have label ${label}!`);
+    }
+    const items = labelDocs.reduce((accumulator, curLabelDoc) => {
+      return accumulator.concat(curLabelDoc.items);
+    }, labelDocs[0].items);
+    return items;
+  }
+
+  /**
+   * Get all labels within a field
+   * @param category any
+   * @returns all item ids within the category
+   * @throws error if there are no labels in a given category, or category is not allowed
+   */
+  private async getLabelsInCategory(category: string): Promise<ObjectId[]> {
+    assert(category in this.allowedCategories, `expected one of ${this.allowedCategories} but got category ${category}`);
+    const categoryDocs = await this.categories.readMany({ category: category });
+    if (categoryDocs.length === 0) {
+      throw new NotFoundError(`No items are in category ${category}!`);
+    }
+    const labels = categoryDocs.reduce((accumulator, curCategoryDoc) => {
+      return accumulator.concat(curCategoryDoc.labels);
+    }, categoryDocs[0].labels);
+    return labels;
+  }
+
+  /**
    * Tag item with labels
    * @param labels tags for an item
    * @param item any
    * @returns returns ids of the labels stored
    */
-  private async updateLabels(labels: string[], item: ObjectId): Promise<ObjectId[]> {
+  private async addItemToLabels(labels: string[], item: ObjectId): Promise<ObjectId[]> {
     const labelIds: ObjectId[] = [];
     for (const label of labels) {
       let labelDoc = await this.labels.readOne({ label });
@@ -144,7 +157,8 @@ export default class LabelingConcept {
         labelIds.concat(await this.labels.createOne({ label, items: [item] }));
       } else {
         labelIds.push(labelDoc._id);
-        await this.labels.partialUpdateOne({ label }, { items: labelDoc.items.concat([item]) });
+        // await this.labels.partialUpdateOne({ label }, { items: labelDoc.items.concat([item]) });
+        await this.labels.updateMany({ label }, { $addToSet: { items: item } });
       }
     }
     return labelIds;
@@ -163,7 +177,8 @@ export default class LabelingConcept {
     } else {
       const allLabelIds = categoryDoc.labels.concat(labelIds);
       const uniqueLabels = this.findUniqueIds(allLabelIds);
-      await this.categories.partialUpdateOne({ category }, { labels: uniqueLabels });
+      // await this.categories.partialUpdateOne({ category }, { labels: uniqueLabels });
+      await this.categories.updateMany({ category }, { $addToSet: { labels: { $each: uniqueLabels } } });
     }
   }
 

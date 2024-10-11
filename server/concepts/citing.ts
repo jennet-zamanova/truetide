@@ -134,4 +134,6 @@ export default class CitingConcept {
     this.citations.deleteOne({ _id });
     return { msg: "Citations deleted successfully!" };
   }
+
+  async update(item: ObjectId, citations: URL[]) {}
 }

@@ -48,6 +48,21 @@ export default class PostingConcept {
     return await this.posts.readOne({ _id });
   }
 
+  async idsToVideos(ids: ObjectId[]) {
+    const posts = await this.posts.readMany({ _id: { $in: ids } });
+    // NOT SURE HOW TO DO WO DOWNLOADING THE VIDEO -> adding a screenshot feels like a lot of work for poc
+    // Store strings in Map because ObjectId comparison by reference is wrong
+    const videoIds: [string, string][] = await Promise.all(
+      posts.map(async (post) => {
+        const videoPath = post.content + "download";
+        await this.posts.downloadVideo(post.content, videoPath);
+        return [post._id.toString(), videoPath];
+      }),
+    );
+    const idToVideo = new Map(videoIds);
+    return ids.map((id) => idToVideo.get(id.toString()) ?? "DELETED_POST");
+  }
+
   async getPostsSubset(ids: ObjectId[]): Promise<PostDoc[]> {
     const optionalContentPosts = await Promise.all(
       ids.map(async (content: ObjectId) => {

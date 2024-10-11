@@ -99,6 +99,7 @@ class Routes {
   async createPost(session: SessionDoc, content: string, citations: string, labels: string, options?: PostOptions) {
     const user = Sessioning.getUser(session);
     const created = await Posting.create(user, content, options);
+    // TODO: delete the video from us locally
     const _id = created.post?._id;
     if (_id !== undefined) {
       await Citing.addCitations(
@@ -111,10 +112,19 @@ class Routes {
   }
 
   @Router.patch("/posts/:id")
-  async updatePost(session: SessionDoc, id: string, content?: string, options?: PostOptions) {
+  async updatePost(session: SessionDoc, id: string, content?: string, citations?: string[], labels?: string[], options?: PostOptions) {
     const user = Sessioning.getUser(session);
     const oid = new ObjectId(id);
     await Posting.assertAuthorIsUser(oid, user);
+    if (citations) {
+      await Citing.update(
+        oid,
+        citations.map((cite) => new URL(cite)),
+      );
+    }
+    if (labels) {
+      await Labeling.updateLabelsForItem(oid, labels);
+    }
     return await Posting.update(oid, content, options);
   }
 
@@ -124,6 +134,7 @@ class Routes {
     const oid = new ObjectId(id);
     await Posting.assertAuthorIsUser(oid, user);
     await Citing.deleteAllCitationsForContent(oid);
+    await Labeling.removeItemFromLabel(oid);
     return Posting.delete(oid);
   }
 
@@ -147,9 +158,6 @@ class Routes {
     return await Citing.addCitations(oid, urls);
   }
 
-  // do we need separate route to open a link?
-
-  // TODO: depends on how we sync posting?
   @Router.get("/api/citations/:filepath/suggestions")
   // @Router.validate(z.object({ content: z.string() }))
   async getSuggestedCitationsContent(filePath: string) {
@@ -162,37 +170,27 @@ class Routes {
    */
 
   // get the "feed"
-
-  // get opposing posts on a topic
-  @Router.get("/api/posts/:topic")
-  async getPairedPostsOnTopic(topic: string) {
-    Labeling.getOpposingItems(topic);
+  @Router.get("/api/categories")
+  async getAllCategories() {
+    return await Labeling.getAllCategories();
   }
 
-  // temp
-  @Router.get("/api/categories/:label")
-  async getCategories(label: string) {
-    var thesaurus = require("powerthesaurus-api");
-    // Callbacks:
-    // try {
-    //   const res = await thesaurus("car");
-    //   console.log(res);
-    // } catch (err) {
-    //   console.error(err);
-    // }
-    thesaurus(label, function (err: any, res: any) {
-      if (err) throw err;
-      console.log(`here the response for ${label}`, res);
-    });
-
-    // thesaurus("blue", "antonyms").then(
-    //   (res: any) => {
-    //     console.log(res);
-    //   },
-    //   (err: any) => {
-    //     throw err;
-    //   },
-    // );
+  // get opposing posts on a topic
+  @Router.get("/api/posts/:category")
+  async getPairedPostsOnTopic(category: string) {
+    const allPosts = [];
+    const postPairs = await Labeling.getOpposingItems(category);
+    for (const postPair of postPairs) {
+      const contents = await Responses.postsWithvideos(await Posting.getPostsSubset(postPair));
+      const labels = await Promise.all(postPair.map((post) => Labeling.getLabelsForItem(post)));
+      allPosts.push(
+        contents.map((content, index) => {
+          content: content;
+          labels: labels[index];
+        }),
+      );
+    }
+    return allPosts;
   }
 
   // // add labels
