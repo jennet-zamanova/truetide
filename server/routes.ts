@@ -7,9 +7,6 @@ import { PostOptions } from "./concepts/posting";
 import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
 
-// import thesaurus from "powerthesaurus-api";
-
-import nlp from "compromise";
 import { z } from "zod";
 
 /**
@@ -20,12 +17,6 @@ class Routes {
 
   @Router.get("/session")
   async getSessionUser(session: SessionDoc) {
-    const doc = nlp("Chocolate Chip Cookies");
-    console.log(doc.topics().out("array")); // Extract topics (basic entities)
-    let doc1 = nlp("she sells seashells by the seashore.");
-    doc1.verbs().toPastTense();
-    console.log(doc1.text());
-    console.log(doc1.topics().json());
     const user = Sessioning.getUser(session);
     return await Authing.getUserById(user);
   }
@@ -114,7 +105,7 @@ class Routes {
         _id,
         citations.split(", ").map((citation) => new URL(citation)),
       );
-      await Labeling.addLabels(_id, labels.split(", "));
+      await Labeling.addLabelsForItem(_id, labels.split(", "));
     }
     return { msg: created.msg, post: await Responses.post(created.post) };
   }
@@ -174,7 +165,7 @@ class Routes {
 
   // get opposing posts on a topic
   @Router.get("/api/posts/:topic")
-  async getPairedPostsOnTopic(topic: String) {
+  async getPairedPostsOnTopic(topic: string) {
     Labeling.getOpposingItems(topic);
   }
 
