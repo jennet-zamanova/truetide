@@ -3,8 +3,33 @@ import { ObjectId } from "mongodb";
 import DocCollection, { BaseDoc } from "../framework/doc";
 import { NotFoundError } from "./errors";
 
+[
+  "Politics & Governance",
+  "Race & Identity",
+  "Free Speech & Censorship",
+  "Social Justice & Activism",
+  "Religion & Belief Systems",
+  "Health & Lifestyle",
+  "Economic Inequality & Class Issues",
+  "Language & Communication",
+  "Gender & Sexuality",
+];
+
+enum CategoryEnum {
+  Category1 = "Politics & Governance",
+  Category2 = "Race & Identity",
+  Category3 = "Free Speech & Censorship",
+  Category4 = "Social Justice & Activism",
+  Category5 = "Religion & Belief Systems",
+  Category6 = "Health & Lifestyle",
+  Category7 = "Economic Inequality & Class Issues",
+  Category8 = "Language & Communication",
+  Category9 = "Gender & Sexuality",
+}
+// the is proof of concept
+type CategoryType = keyof typeof CategoryEnum;
 export interface CategoryDoc extends BaseDoc {
-  category: string;
+  category: CategoryType;
   labels: ObjectId[];
 }
 
@@ -17,18 +42,20 @@ export interface LabelDoc extends BaseDoc {
 /**WIP!!! */
 // TODO: add deleting functionality
 /**
- * concept: Labeling [Item]
+ * concept: Labeling [Item, Categories]
  */
-export default class LabelingConcept {
+export default class LabelingConcept<T, U> {
   public readonly categories: DocCollection<CategoryDoc>;
   public readonly labels: DocCollection<LabelDoc>;
+  public readonly allowedCategories: U;
 
   /**
    * Make an instance of Labeling.
    */
-  constructor(collectionName: string) {
+  constructor(collectionName: string, allowedCategories: U) {
     this.labels = new DocCollection<LabelDoc>(collectionName + "Labels");
     this.categories = new DocCollection<CategoryDoc>(collectionName + "Categories");
+    this.allowedCategories = allowedCategories;
   }
 
   /**
@@ -39,7 +66,7 @@ export default class LabelingConcept {
    */
   async addLabelsForItem(item: ObjectId, labels: string[]) {
     // find category
-    const category = await this.findCategory(labels);
+    const category = await this.findCategoryGemini(labels);
     // add all items with corresponding labels
     const labelIds = await this.addLabels(labels, item);
     // add labels to category
@@ -85,7 +112,7 @@ export default class LabelingConcept {
    * @throws error if there are no labels in a given category
    */
   async getLabelsInCategory(category: string): Promise<ObjectId[]> {
-    const categoryDocs = await this.categories.readMany({ category });
+    const categoryDocs = await this.categories.readMany({ category: category as CategoryType });
     if (categoryDocs.length === 0) {
       throw new NotFoundError(`No items are in category ${category}!`);
     }
@@ -161,40 +188,42 @@ export default class LabelingConcept {
     }
   }
 
+  // for now ask GEMINI
+  private getModelForCategory(): GenerativeModel {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
+
+    const schema = {
+      description: "List of opposing label pairs in a given category",
+      type: SchemaType.STRING,
+    };
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-pro",
+      generationConfig: {
+        temperature: 1,
+        topP: 0.95,
+        topK: 64,
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      },
+      systemInstruction: `Given a set of labels, decide which one of these categories the labels fit the best. 
+      The categories: [${Object.values(CategoryEnum)}]`,
+    });
+
+    return model;
+  }
+
   /**
-   * Find general field the labels belong to
-   * @param labels some words that can be part of a common category
-   * @returns category that these labels belong to
+   * Get general category labels belong to
+   * @param labels tags
+   * @returns One of the general categories the labels belong to
    */
-  private async findCategory(labels: string[]): Promise<string> {
-    // TODO: some NLP
-    const categories: Map<string, number> = new Map();
-    for (const label of labels) {
-      try {
-        const res = await thesaurus(label);
-        for (const topic of res.topics) {
-          const freq = categories.get(topic);
-          if (freq !== undefined) {
-            categories.set(topic, freq + 1);
-          } else {
-            categories.set(topic, 1);
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    let mostFreqCategory: string = Object.keys(categories)[0];
-    let maxValue = -Infinity;
-
-    for (const [key, value] of Object.entries(categories)) {
-      if (value > maxValue) {
-        maxValue = value;
-        mostFreqCategory = key;
-      }
-    }
-    return mostFreqCategory;
+  private async findCategoryGemini(labels: string[]): Promise<CategoryType> {
+    const model = this.getModelForCategory();
+    const result = await model.generateContent(`
+      Here are the labels: \`\`\`${labels}\`\`\``);
+    return JSON.parse(result.response.text());
   }
 
   /**
@@ -252,4 +281,41 @@ export default class LabelingConcept {
     // TODO would be useful in future
     return category;
   }
+
+  // could be good in future, but did not figure out thesaurus api
+  /**
+   * Find general field the labels belong to
+   * @param labels some words that can be part of a common category
+   * @returns category that these labels belong to
+   */
+  // private async findCategory(labels: string[]): Promise<string> {
+  //   // TODO: some NLP
+  //   const categories: Map<string, number> = new Map();
+  //   for (const label of labels) {
+  //     try {
+  //       const res = await thesaurus(label);
+  //       for (const topic of res.topics) {
+  //         const freq = categories.get(topic);
+  //         if (freq !== undefined) {
+  //           categories.set(topic, freq + 1);
+  //         } else {
+  //           categories.set(topic, 1);
+  //         }
+  //       }
+  //     } catch (err) {
+  //       console.error(err);
+  //     }
+  //   }
+
+  //   let mostFreqCategory: string = Object.keys(categories)[0];
+  //   let maxValue = -Infinity;
+
+  //   for (const [key, value] of Object.entries(categories)) {
+  //     if (value > maxValue) {
+  //       maxValue = value;
+  //       mostFreqCategory = key;
+  //     }
+  //   }
+  //   return mostFreqCategory;
+  // }
 }
