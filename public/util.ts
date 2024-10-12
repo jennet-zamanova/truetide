@@ -111,7 +111,7 @@ const operations: Operation[] = [
     fields: { id: "input" },
   },
   {
-    name: "Get Suggested Citations (works only locally because could not get help)",
+    name: "Get Suggested Citations (does not work because could not get help)",
     endpoint: "/api/citations/suggestions",
     method: "GET",
     fields: { fileURL: "input" },
@@ -121,6 +121,12 @@ const operations: Operation[] = [
     endpoint: "/api/citations/localsuggestions",
     method: "GET",
     fields: { filePath: "input" },
+  },
+  {
+    name: "Get suggested citations from text (at least would work for comments if I had them)",
+    endpoint: "/api/citations/text-suggestions",
+    method: "GET",
+    fields: { text: "input" },
   },
 ];
 
