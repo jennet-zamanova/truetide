@@ -44,8 +44,15 @@ app.all("*", (req, res) => {
   });
 });
 
+// Serverless handler export
+// export default async (req: any, res: any) => {
+//   return app(req, res);
+// };
+
 void connectDb().then(() => {
   app.listen(PORT, () => {
     console.log("Started listening on port", PORT);
   });
 });
+
+export default app;
