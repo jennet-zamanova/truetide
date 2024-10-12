@@ -179,7 +179,8 @@ function fieldsToHtml(fields: Record<string, Field>, indent = 0, prefix = ""): s
 
 function getHtmlOperations() {
   return operations.map((operation) => {
-    return `<li class="operation">
+    if (operation.name === "Get Suggested Citations") {
+      return `<li class="operation">
       <h3>${operation.name}</h3>
       <form class="operation-form">
         <input type="hidden" name="$endpoint" value="${operation.endpoint}" />
@@ -188,6 +189,17 @@ function getHtmlOperations() {
         <button type="submit">Submit</button>
       </form>
     </li>`;
+    } else {
+      return `<li class="operation">
+      <h3>${operation.name}</h3>
+      <form class="operation-form" enctype="multipart/form-data">
+        <input type="hidden" name="$endpoint" value="${operation.endpoint}" />
+        <input type="hidden" name="$method" value="${operation.method}" />
+        <input type="file" name="filePath" />
+        <button type="submit">Submit</button>
+      </form>
+    </li>`;
+    }
   });
 }
 

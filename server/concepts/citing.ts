@@ -1,19 +1,22 @@
 import { ObjectId } from "mongodb";
-import OpenAI from "openai";
+// import OpenAI from "openai";
 import DocCollection, { BaseDoc } from "../framework/doc";
 
-import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { NotFoundError } from "./errors";
 import { getModelForCitations } from "./utils";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENAI_API_KEY,
+// });
 
 const Citations = z.object({
   links: z.array(z.string()),
 });
+
+// While this code may look very specific, note that
+// none of these parts assume anything about item they are citing
+// so can be used on comments, textual posts, video posts, etc.
 
 export interface CitationDoc extends BaseDoc {
   urls: string[];
@@ -47,35 +50,36 @@ export default class CitingConcept {
     return prompt;
   }
 
+  // NOTE!!!!
+  // GEMINI is worse than OPENAI, so links will not be as good, but no one is investing in me yet, sorry :(
   /**
    * Find citations for the `text`
    * @param text information
    * @returns citations to support information
    */
-  async createCitationsGPT(text: string) {
-    const rolePrompt = `Find credible online sources.`;
+  // private async createCitationsGPT(text: string) {
+  //   const rolePrompt = `Find credible online sources.`;
 
-    const completion = await openai.beta.chat.completions.parse({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: rolePrompt },
-        { role: "user", content: this.createPrompt(text) },
-      ],
-      response_format: zodResponseFormat(Citations, "links"),
-    });
+  //   const completion = await openai.beta.chat.completions.parse({
+  //     model: "gpt-4o-mini",
+  //     messages: [
+  //       { role: "system", content: rolePrompt },
+  //       { role: "user", content: this.createPrompt(text) },
+  //     ],
+  //     response_format: zodResponseFormat(Citations, "links"),
+  //   });
 
-    const links = completion.choices[0].message.parsed;
-    return links;
-  }
+  //   const links = completion.choices[0].message.parsed?.links;
+  //   return links;
+  // }
 
   async createCitationsGemini(text: string) {
+    // TODO: need to learn how to deal with token limits and display messaged accordingly
     const model = getModelForCitations();
     const result = await model.generateContent(this.createPrompt(text));
     return JSON.parse(result.response.text());
   }
 
-  // NOTE!!!!
-  // GEMINI is worse than OPENAI, so links will not be as good, but no one is investing in me yet, sorry :(
   /**
    * Stored the citations for the given content
    * @param content supported by citations
@@ -112,13 +116,11 @@ export default class CitingConcept {
    * @throws error if the `item` does not exist
    */
   async deleteAllCitationsForContent(item: ObjectId) {
-    console.log("starting delete of post", item);
     const _id = (await this.citations.readOne({ item }))?._id;
     if (!_id) {
       throw new NotFoundError(`Item ${item} does not exist!`);
     }
     await this.citations.deleteOne({ _id });
-    console.log("delete citations for item ", item, _id);
     return { msg: "Citations deleted successfully!" };
   }
 
