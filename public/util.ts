@@ -15,6 +15,48 @@ type Operation = {
  */
 const operations: Operation[] = [
   {
+    name: "donwload post",
+    endpoint: "/api/posts/download/:videoid",
+    method: "GET",
+    fields: { videoid: "input" },
+  },
+  {
+    name: "Get Suggested Citations",
+    endpoint: "/api/citations/suggestions",
+    method: "GET",
+    fields: { filePath: "input" },
+  },
+  {
+    name: "Add Citations for Post",
+    endpoint: "/api/posts/:postId/citations",
+    method: "POST",
+    fields: { postId: "input", links: "input" },
+  },
+  {
+    name: "Get Citations for Post",
+    endpoint: "/api/posts/:postId/citations",
+    method: "GET",
+    fields: { postId: "input" },
+  },
+  {
+    name: "Get All categories",
+    endpoint: "/api/categories",
+    method: "GET",
+    fields: {},
+  },
+  {
+    name: "Get Opposing Posts",
+    endpoint: "/api/posts/:category",
+    method: "GET",
+    fields: { category: "input" },
+  },
+  {
+    name: "Get all Posts with Tag",
+    endpoint: "/api/posts/labels/:label",
+    method: "GET",
+    fields: { label: "input" },
+  },
+  {
     name: "Get Session User (logged in user)",
     endpoint: "/api/session",
     method: "GET",
@@ -66,13 +108,13 @@ const operations: Operation[] = [
     name: "Create Post",
     endpoint: "/api/posts",
     method: "POST",
-    fields: { content: "input" },
+    fields: { content: "input", citations: "input", labels: "input" },
   },
   {
     name: "Update Post",
     endpoint: "/api/posts/:id",
     method: "PATCH",
-    fields: { id: "input", content: "input", options: { backgroundColor: "input" } },
+    fields: { id: "input", content: "input", citations: "input", labels: "input", options: { backgroundColor: "input" } },
   },
   {
     name: "Delete Post",
@@ -80,9 +122,6 @@ const operations: Operation[] = [
     method: "DELETE",
     fields: { id: "input" },
   },
-  //
-  // ...
-  //
 ];
 
 /*

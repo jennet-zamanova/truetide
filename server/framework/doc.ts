@@ -12,9 +12,13 @@ import {
   ObjectId,
   OptionalUnlessRequiredId,
   ReplaceOptions,
+  UpdateFilter,
+  UpdateOptions,
   UpdateResult,
   WithoutId,
 } from "mongodb";
+
+import fs from "fs";
 
 import db from "../db";
 
@@ -35,7 +39,6 @@ export default class DocCollection<Schema extends BaseDoc> {
   public readonly collection: Collection<Schema>;
   public readonly bucket: GridFSBucket;
   private static collectionNames: Set<string> = new Set();
-  private fs = require("fs");
 
   constructor(public readonly name: string) {
     if (DocCollection.collectionNames.has(name)) {
@@ -119,6 +122,10 @@ export default class DocCollection<Schema extends BaseDoc> {
     return await this.collection.updateOne(filter, { $set: safe as Partial<Schema> }, options);
   }
 
+  async updateMany(filter: Filter<Schema>, update: UpdateFilter<Schema>, options?: UpdateOptions): Promise<UpdateResult<Schema>> {
+    return await this.collection.updateMany(filter, update, options);
+  }
+
   /**
    * Delete the document that matches `filter`.
    * @returns an object describing what was deleted
@@ -160,35 +167,39 @@ export default class DocCollection<Schema extends BaseDoc> {
    * You may wish to add more methods, e.g. using other MongoDB operations!
    */
   async uploadVideo(filePath: string): Promise<ObjectId> {
-    // const safe = this.withoutInternal(item);
-    // safe.dateCreated = new Date();
-    // safe.dateUpdated = new Date();
     const uploadStream = this.bucket.openUploadStream(filePath);
-    // const fs = require("fs");
-    let _id = new ObjectId();
-    this.fs
-      .createReadStream(filePath)
-      .pipe(uploadStream)
-      .on("error", (error: Error) => {
-        console.error("Error uploading video:", error);
-      })
-      .on("finish", () => {
-        console.log("Video uploaded successfully");
-        _id = uploadStream.id;
-      });
-    return _id;
+    return new Promise((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(uploadStream)
+        .on("finish", () => {
+          console.log("Video uploaded successfully with id", uploadStream.id);
+          resolve(uploadStream.id);
+        })
+        .on("error", (error: Error) => {
+          console.error("Error uploading video:", error);
+          reject(error);
+        });
+    });
   }
 
   async downloadVideo(_id: ObjectId, outputPath: string): Promise<string> {
-    await this.bucket
-      .openDownloadStream(_id)
-      .pipe(this.fs.createWriteStream(outputPath))
-      .on("error", (error: Error) => {
-        console.error("Error downloading video:", error);
-      })
-      .on("finish", () => {
-        console.log("Video downloaded successfully");
-      });
-    return outputPath;
+    console.log("trying to download file with id: ", _id);
+    return new Promise((resolve, reject) => {
+      this.bucket
+        .openDownloadStream(_id)
+        .pipe(fs.createWriteStream(outputPath))
+        .on("finish", () => {
+          console.log("Video downloaded successfully at", outputPath);
+          resolve(outputPath);
+        })
+        .on("error", (error: Error) => {
+          console.error("Error downloading video:", error);
+          reject(error);
+        });
+    });
+  }
+
+  async deleteVideo(_id: ObjectId) {
+    return await this.bucket.delete(_id);
   }
 }
