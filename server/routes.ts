@@ -198,6 +198,11 @@ class Routes {
     return await Citing.createCitationsGemini(text);
   }
 
+  @Router.get("/citations/text-suggestions")
+  async getSuggestedCitationsFromText(text: string) {
+    return await Citing.createCitationsGemini(text);
+  }
+
   /**
    * Labeling routes
    */
