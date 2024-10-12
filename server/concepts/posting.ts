@@ -29,7 +29,6 @@ export default class PostingConcept {
 
   async create(author: ObjectId, filePath: string, options?: PostOptions) {
     const content = await this.posts.uploadVideo(filePath);
-    console.log("content id: ", content);
     const _id = await this.posts.createOne({ author, content, options });
     return { msg: "Post successfully created!", post: await this.posts.readOne({ _id }) };
   }
@@ -48,7 +47,6 @@ export default class PostingConcept {
     const posts = await this.posts.readMany({ _id: { $in: ids } });
     // NOT SURE HOW TO DO WO DOWNLOADING THE VIDEO -> adding a screenshot feels like a lot of work for poc
     // Store strings in Map because ObjectId comparison by reference is wrong
-    console.log("here are the posts with ids", posts);
     const videoIds: [string, string][] = await Promise.all(
       posts.map(async (post) => {
         const videoPath = post.content + "download.mp4";
@@ -56,7 +54,6 @@ export default class PostingConcept {
         return [post._id.toString(), videoPath];
       }),
     );
-    console.log("post id to video path", videoIds);
     const idToVideo = new Map(videoIds);
     return ids.map((id) => idToVideo.get(id.toString()) ?? "DELETED_POST");
   }
@@ -76,8 +73,6 @@ export default class PostingConcept {
   }
 
   async update(_id: ObjectId, content?: string, options?: PostOptions) {
-    // Note that if content or options is undefined, those fields will *not* be updated
-    // since undefined values for partialUpdateOne are ignored.
     if (content !== undefined) {
       const content_id = await this.posts.uploadVideo(content);
       await this.posts.partialUpdateOne({ _id }, { content: content_id, options });
@@ -118,6 +113,7 @@ export default class PostingConcept {
    * @returns text spoken in the file
    */
   async getFileText(filePath: string): Promise<string> {
+    // TODO: learn how to deal with token limits
     const model = getModelForVideoToText();
     const fileManager = getFileManager();
     const file = await uploadToGemini(fileManager, filePath);

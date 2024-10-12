@@ -8,6 +8,7 @@ import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
 
 import { z } from "zod";
+import { NotAllowedError } from "./concepts/errors";
 
 /**
  * Web server routes for the app. Implements synchronizations between concepts.
@@ -97,12 +98,16 @@ class Routes {
    */
   @Router.post("/posts")
   async createPost(session: SessionDoc, content: string, citations: string, labels: string, options?: PostOptions) {
+    const links = citations.split(", ");
+    if (links.map((link) => URL.canParse(link)).filter((isLink) => !isLink).length !== 0) {
+      throw new NotAllowedError(`expected comma-separated links but got ${citations}`);
+    }
     const user = Sessioning.getUser(session);
     const created = await Posting.create(user, content, options);
     // TODO: delete the video from us locally
     const _id = created.post?._id;
     if (_id !== undefined) {
-      await Citing.addCitations(_id, citations.split(", "));
+      await Citing.addCitations(_id, links);
       await Labeling.addLabelsForItem(_id, labels.split(", "));
     }
     return { msg: created.msg, post: await Responses.post(created.post) };
@@ -119,11 +124,15 @@ class Routes {
    */
   @Router.patch("/posts/:id")
   async updatePost(session: SessionDoc, id: string, content?: string, citations?: string, labels?: string, options?: PostOptions) {
+    const links = citations?.split(", ") ?? [];
+    if (links.map((link) => URL.canParse(link)).filter((isLink) => !isLink).length !== 0) {
+      throw new NotAllowedError(`expected comma-separated links but got ${citations}`);
+    }
     const user = Sessioning.getUser(session);
     const oid = new ObjectId(id);
     await Posting.assertAuthorIsUser(oid, user);
     if (citations) {
-      await Citing.update(oid, citations.split(", "));
+      await Citing.update(oid, links);
     }
     if (labels) {
       await Labeling.updateLabelsForItem(oid, labels.split(", "));
@@ -152,18 +161,18 @@ class Routes {
     return citations;
   }
 
-  // TODO check that comma separated values
   @Router.post("/posts/:postId/citations")
   async addCitations(session: SessionDoc, postId: string, links: string) {
+    const urls = links.split(", ");
+    if (urls.map((link) => URL.canParse(link)).filter((isLink) => !isLink).length !== 0) {
+      throw new NotAllowedError(`expected comma-separated links but got ${links}`);
+    }
     const user = Sessioning.getUser(session);
     const oid = new ObjectId(postId);
     await Posting.assertAuthorIsUser(oid, user);
-    const urls = links.split(", ");
     console.log("here are the urls to be added", urls);
     return await Citing.addCitations(oid, urls);
   }
-
-  // @Router.validate(z.object({ content: z.string() }))
 
   @Router.get("/citations/suggestions")
   async getSuggestedCitationsContent(filePath: string) {
@@ -190,6 +199,9 @@ class Routes {
   // get opposing posts on a topic
   @Router.get("/posts/:category")
   async getPairedPostsOnTopic(category: string) {
+    if (!(await Labeling.getAllCategories()).includes(category)) {
+      return { msg: `the are no posts in category ${category} yet` };
+    }
     const allPosts = [];
     const postPairs = await Labeling.getOpposingItems(category);
     console.log("here are the pairs", postPairs);
