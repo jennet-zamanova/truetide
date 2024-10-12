@@ -1,8 +1,8 @@
-import { GenerativeModel, GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import assert from "assert";
 import { ObjectId } from "mongodb";
 import DocCollection, { BaseDoc } from "../framework/doc";
 import { NotFoundError } from "./errors";
+import { getModelForCategory, getModelForLabelPairs } from "./utils";
 // the is proof of concept
 // type CategoryType = keyof typeof U;
 export interface CategoryDoc extends BaseDoc {
@@ -197,39 +197,13 @@ export default class LabelingConcept {
     }
   }
 
-  // for now ask GEMINI
-  private getModelForCategory(): GenerativeModel {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
-
-    const schema = {
-      description: "List of opposing label pairs in a given category",
-      type: SchemaType.STRING,
-    };
-
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-pro",
-      generationConfig: {
-        temperature: 1,
-        topP: 0.95,
-        topK: 64,
-        maxOutputTokens: 8192,
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-      systemInstruction: `Given a set of labels, decide which one of these categories the labels fit the best. 
-      The categories: [${this.allowedCategories}]`,
-    });
-
-    return model;
-  }
-
   /**
    * Get general category labels belong to
    * @param labels tags
    * @returns One of the general categories the labels belong to
    */
   private async findCategoryGemini(labels: string[]): Promise<string> {
-    const model = this.getModelForCategory();
+    const model = getModelForCategory(this.allowedCategories);
     const result = await model.generateContent(`
       Here are the labels: \`\`\`${labels}\`\`\``);
     const category = JSON.parse(result.response.text());
@@ -253,37 +227,10 @@ export default class LabelingConcept {
     return (await this.labels.readMany({ _id: { $in: labels } })).map((labelDoc) => labelDoc.label);
   }
 
-  private getModelForLabelPairs(): GenerativeModel {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
-
-    const schema = {
-      description: "List of opposing label pairs in a given category",
-      type: SchemaType.ARRAY,
-      items: {
-        description: "A pair of strings that are opposites of each other in a given category",
-        type: SchemaType.ARRAY,
-        items: {
-          type: SchemaType.STRING,
-          nullable: false,
-        },
-      },
-    };
-
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-pro",
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    });
-
-    return model;
-  }
-
   private async getOppositeLabelPairs(labels: ObjectId[], category: string): Promise<string[][]> {
     const labelVaues = await this.getLabelsValues(labels);
     console.log("label values", labelVaues);
-    const model = this.getModelForLabelPairs();
+    const model = getModelForLabelPairs();
     const result = await model.generateContent(`
       Given a list of labels enclosed in \`\`\` in category ${category}, 
       pair the labels l_1 and l_2 together 

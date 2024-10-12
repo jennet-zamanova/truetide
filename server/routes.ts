@@ -169,8 +169,7 @@ class Routes {
   async getSuggestedCitationsContent(filePath: string) {
     const text = await Posting.getFileText(filePath);
     console.log(`Here is the text of the video ${text}`);
-    // return await Citing.createCitationsGemini(text);
-    return "error";
+    return await Citing.createCitationsGemini(text);
   }
 
   /**

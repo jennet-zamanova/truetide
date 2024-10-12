@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { ObjectId } from "mongodb";
 import OpenAI from "openai";
 import DocCollection, { BaseDoc } from "../framework/doc";
@@ -6,6 +5,7 @@ import DocCollection, { BaseDoc } from "../framework/doc";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { NotFoundError } from "./errors";
+import { getModelForCitations } from "./utils";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -69,28 +69,13 @@ export default class CitingConcept {
   }
 
   async createCitationsGemini(text: string) {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
-    const schema = {
-      type: SchemaType.ARRAY,
-      items: {
-        description: "URL for the source supporting the content",
-        type: SchemaType.STRING,
-      },
-    };
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-pro",
-      generationConfig: {
-        temperature: 1,
-        topP: 0.95,
-        topK: 64,
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    });
+    const model = getModelForCitations();
     const result = await model.generateContent(this.createPrompt(text));
     return JSON.parse(result.response.text());
   }
 
+  // NOTE!!!!
+  // GEMINI is worse than OPENAI, so links will not be as good, but no one is investing in me yet, sorry :(
   /**
    * Stored the citations for the given content
    * @param content supported by citations
