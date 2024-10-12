@@ -10,9 +10,6 @@ import Responses from "./responses";
 import { z } from "zod";
 import { NotAllowedError } from "./concepts/errors";
 
-import multer from "multer";
-import path from "path";
-
 /**
  * Web server routes for the app. Implements synchronizations between concepts.
  */
@@ -164,7 +161,6 @@ class Routes {
     return citations;
   }
 
-  // TODO check that comma separated values
   @Router.post("/posts/:postId/citations")
   async addCitations(session: SessionDoc, postId: string, links: string) {
     const urls = links.split(", ");
@@ -179,31 +175,7 @@ class Routes {
   }
 
   @Router.get("/citations/suggestions")
-  async getSuggestedCitationsContent(filePath: Express.Multer.File) {
-    console.log("file is ", filePath);
-    const storage = multer.diskStorage({
-      destination: (req: any, file: any, cb: any) => {
-        cb(null, "uploads/"); // Directory where files will be stored
-      },
-      filename: (req: any, file: any, cb: any) => {
-        const uniqueSuffix = Date.now() + "-" + Math.random().toString(36).substring(2, 15);
-        cb(null, uniqueSuffix + path.extname(file.originalname)); // Store with a unique name
-      },
-    });
-
-    // Create multer instance
-    const upload = multer({ storage: storage });
-    const multerMiddleware = upload.single(filePath.filename);
-    await new Promise<void>((resolve, reject) => {
-      multerMiddleware(req, res, (err: unknown) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve();
-      });
-    }); // const upload = multer({ dest: "./video/uploads/" });
-    // upload.single(filePath);
-    console.log("here is the file: ", filePath);
+  async getSuggestedCitationsContent(filePath: string) {
     const text = await Posting.getFileText(filePath);
     console.log(`Here is the text of the video ${text}`);
     return await Citing.createCitationsGemini(text);
@@ -260,19 +232,3 @@ export const app = new Routes();
 
 /** The Express router. */
 export const appRouter = getExpressRouter(app);
-
-async function multerPromiseMiddleware(req: Request): Promise<Express.Multer.File> {
-  const multerMiddleware = upload.single("filePath");
-
-  return new Promise((resolve, reject) => {
-    multerMiddleware(req, {} as Response, (err: Error | null) => {
-      if (err) {
-        return reject(err);
-      }
-      if (!req.file) {
-        return reject(new Error("No file uploaded."));
-      }
-      resolve(req.file);
-    });
-  });
-}
