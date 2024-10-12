@@ -90,7 +90,7 @@ class Routes {
   /**
    * Update all MONGODB collections to add item and associated values
    * @param session
-   * @param content path to a video file
+   * @param content url to a video file
    * @param citations comma separated values
    * @param labels comma separated values
    * @param options
@@ -102,9 +102,11 @@ class Routes {
     if (links.map((link) => URL.canParse(link)).filter((isLink) => !isLink).length !== 0) {
       throw new NotAllowedError(`expected comma-separated links but got ${citations}`);
     }
+    if (!URL.canParse(content)) {
+      throw new NotAllowedError("Expected a link to a video but got ", content);
+    }
     const user = Sessioning.getUser(session);
     const created = await Posting.create(user, content, options);
-    // TODO: delete the video from us locally
     const _id = created.post?._id;
     if (_id !== undefined) {
       await Citing.addCitations(_id, links);
@@ -116,7 +118,7 @@ class Routes {
   /**
    * Update all MONGODB collections to update item and associated values
    * @param session
-   * @param content path to a video file
+   * @param content url to a video file
    * @param citations comma separated values
    * @param labels comma separated values
    * @param options
@@ -127,6 +129,11 @@ class Routes {
     const links = citations?.split(", ") ?? [];
     if (links.map((link) => URL.canParse(link)).filter((isLink) => !isLink).length !== 0) {
       throw new NotAllowedError(`expected comma-separated links but got ${citations}`);
+    }
+    if (content) {
+      if (!URL.canParse(content)) {
+        throw new NotAllowedError("Expected a link to a video but got ", content);
+      }
     }
     const user = Sessioning.getUser(session);
     const oid = new ObjectId(id);
@@ -175,8 +182,18 @@ class Routes {
   }
 
   @Router.get("/citations/suggestions")
-  async getSuggestedCitationsContent(filePath: string) {
-    const text = await Posting.getFileText(filePath);
+  async getSuggestedCitationsContent(fileURL: string) {
+    if (!URL.canParse(fileURL)) {
+      throw new NotAllowedError("Expected a link to a video but got ", fileURL);
+    }
+    const text = await Posting.getFileText(fileURL);
+    console.log(`Here is the text of the video ${text}`);
+    return await Citing.createCitationsGemini(text);
+  }
+
+  @Router.get("/citations/localsuggestions")
+  async getSuggestedCitationsContentLocally(filePath: string) {
+    const text = await Posting.getFileTextLocally(filePath);
     console.log(`Here is the text of the video ${text}`);
     return await Citing.createCitationsGemini(text);
   }
@@ -206,7 +223,7 @@ class Routes {
     const postPairs = await Labeling.getOpposingItems(category);
     console.log("here are the pairs", postPairs);
     for (const postPair of postPairs) {
-      const contents = await Responses.postsWithvideos(await Posting.getPostsSubset(postPair));
+      const contents = await Posting.getPostsSubset(postPair);
       console.log("here are the contents: ", contents);
       const labels = await Promise.all(postPair.map((post) => Labeling.getLabelsForItem(post)));
       console.log("here are the labels: ", labels);
@@ -219,12 +236,12 @@ class Routes {
     return allPosts;
   }
 
-  @Router.get("/posts/download/:videoid")
-  async downloadVideo(videoid: string) {
-    console.log("the video id we are using: ", videoid, new ObjectId(videoid));
-    await Posting.posts.downloadVideo(new ObjectId(videoid), "test.mp4");
-    return { msg: "Downloaded successfully" };
-  }
+  // @Router.get("/posts/download/:videoid")
+  // async downloadVideo(videoid: string) {
+  //   console.log("the video id we are using: ", videoid, new ObjectId(videoid));
+  //   await Posting.posts.downloadVideo(new ObjectId(videoid), "test.mp4");
+  //   return { msg: "Downloaded successfully" };
+  // }
 }
 
 /** The web app. */

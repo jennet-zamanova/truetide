@@ -166,6 +166,7 @@ export default class DocCollection<Schema extends BaseDoc> {
   /*
    * You may wish to add more methods, e.g. using other MongoDB operations!
    */
+  // ASSUMING SERVER LETS ME DO THIS
   async uploadVideo(filePath: string): Promise<ObjectId> {
     const uploadStream = this.bucket.openUploadStream(filePath);
     return new Promise((resolve, reject) => {
