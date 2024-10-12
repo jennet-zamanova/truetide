@@ -16,7 +16,7 @@ const Citations = z.object({
 });
 
 export interface CitationDoc extends BaseDoc {
-  urls: URL[];
+  urls: string[];
   item: ObjectId;
 }
 
@@ -97,14 +97,14 @@ export default class CitingConcept {
    * @param citations links to sources
    * @returns confirmation message
    */
-  async addCitations(content: ObjectId, citations: URL[]) {
-    let citationdoc = await this.citations.readOne({ _id: content });
+  async addCitations(content: ObjectId, citations: string[]) {
+    let citationdoc = await this.citations.readOne({ item: content });
     if (citationdoc === null) {
       await this.citations.createOne({ urls: citations, item: content });
     } else {
-      await this.citations.partialUpdateOne({ items: content }, { urls: citationdoc.urls.concat(citations) });
+      await this.citations.partialUpdateOne({ item: content }, { urls: [...new Set(citationdoc.urls.concat(citations))] });
     }
-    return { msg: "Citations successfully added!", citations: await this.citations.readOne({ _id: content }) };
+    return { msg: "Citations successfully added!", citations: await this.citations.readOne({ item: content }) };
   }
 
   /**
@@ -127,13 +127,24 @@ export default class CitingConcept {
    * @throws error if the `item` does not exist
    */
   async deleteAllCitationsForContent(item: ObjectId) {
-    const _id = await this.citations.readOne({ item });
+    console.log("starting delete of post", item);
+    const _id = (await this.citations.readOne({ item }))?._id;
     if (!_id) {
       throw new NotFoundError(`Item ${item} does not exist!`);
     }
-    this.citations.deleteOne({ _id });
+    await this.citations.deleteOne({ _id });
+    console.log("delete citations for item ", item, _id);
     return { msg: "Citations deleted successfully!" };
   }
 
-  async update(item: ObjectId, citations: URL[]) {}
+  // TODO
+  async update(item: ObjectId, citations: string[]) {
+    let citationdoc = await this.citations.readOne({ item });
+    if (citationdoc === null) {
+      await this.citations.createOne({ urls: citations, item });
+    } else {
+      await this.citations.partialUpdateOne({ item }, { urls: citations });
+    }
+    return { msg: "Citations successfully added!", citations: await this.citations.readOne({ item }) };
+  }
 }

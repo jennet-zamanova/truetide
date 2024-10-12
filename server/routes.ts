@@ -102,28 +102,31 @@ class Routes {
     // TODO: delete the video from us locally
     const _id = created.post?._id;
     if (_id !== undefined) {
-      await Citing.addCitations(
-        _id,
-        citations.split(", ").map((citation) => new URL(citation)),
-      );
+      await Citing.addCitations(_id, citations.split(", "));
       await Labeling.addLabelsForItem(_id, labels.split(", "));
     }
     return { msg: created.msg, post: await Responses.post(created.post) };
   }
 
+  /**
+   * Update all MONGODB collections to update item and associated values
+   * @param session
+   * @param content path to a video file
+   * @param citations comma separated values
+   * @param labels comma separated values
+   * @param options
+   * @returns
+   */
   @Router.patch("/posts/:id")
-  async updatePost(session: SessionDoc, id: string, content?: string, citations?: string[], labels?: string[], options?: PostOptions) {
+  async updatePost(session: SessionDoc, id: string, content?: string, citations?: string, labels?: string, options?: PostOptions) {
     const user = Sessioning.getUser(session);
     const oid = new ObjectId(id);
     await Posting.assertAuthorIsUser(oid, user);
     if (citations) {
-      await Citing.update(
-        oid,
-        citations.map((cite) => new URL(cite)),
-      );
+      await Citing.update(oid, citations.split(", "));
     }
     if (labels) {
-      await Labeling.updateLabelsForItem(oid, labels);
+      await Labeling.updateLabelsForItem(oid, labels.split(", "));
     }
     return await Posting.update(oid, content, options);
   }
@@ -142,27 +145,32 @@ class Routes {
    * Citing routes
    */
 
-  @Router.get("/api/posts/:postId/citations")
+  @Router.get("/posts/:postId/citations")
   async getCitations(postId: string) {
     const oid = new ObjectId(postId);
     const citations = (await Citing.getCitations(oid)).citations;
     return citations;
   }
 
-  @Router.post("/api/posts/:postId/citations")
-  async addCitations(session: SessionDoc, id: string, links: string[]) {
+  // TODO check that comma separated values
+  @Router.post("/posts/:postId/citations")
+  async addCitations(session: SessionDoc, postId: string, links: string) {
     const user = Sessioning.getUser(session);
-    const oid = new ObjectId(id);
+    const oid = new ObjectId(postId);
     await Posting.assertAuthorIsUser(oid, user);
-    const urls = links.map((link: string) => new URL(link));
+    const urls = links.split(", ");
+    console.log("here are the urls to be added", urls);
     return await Citing.addCitations(oid, urls);
   }
 
-  @Router.get("/api/citations/:filepath/suggestions")
   // @Router.validate(z.object({ content: z.string() }))
+
+  @Router.get("/citations/suggestions")
   async getSuggestedCitationsContent(filePath: string) {
     const text = await Posting.getFileText(filePath);
-    return await Citing.createCitationsGemini(text);
+    console.log(`Here is the text of the video ${text}`);
+    // return await Citing.createCitationsGemini(text);
+    return "error";
   }
 
   /**
@@ -170,107 +178,42 @@ class Routes {
    */
 
   // get the "feed"
-  @Router.get("/api/categories")
+  @Router.get("/categories")
   async getAllCategories() {
     return await Labeling.getAllCategories();
   }
 
+  @Router.get("/posts/labels/:label")
+  async getItems(label: string) {
+    return await Labeling.getItemsWithLabel(label);
+  }
+
   // get opposing posts on a topic
-  @Router.get("/api/posts/:category")
+  @Router.get("/posts/:category")
   async getPairedPostsOnTopic(category: string) {
     const allPosts = [];
     const postPairs = await Labeling.getOpposingItems(category);
+    console.log("here are the pairs", postPairs);
     for (const postPair of postPairs) {
       const contents = await Responses.postsWithvideos(await Posting.getPostsSubset(postPair));
+      console.log("here are the contents: ", contents);
       const labels = await Promise.all(postPair.map((post) => Labeling.getLabelsForItem(post)));
-      allPosts.push(
-        contents.map((content, index) => {
-          content: content;
-          labels: labels[index];
-        }),
-      );
+      console.log("here are the labels: ", labels);
+      const post_info = contents.map((content, index) => {
+        return { content: content, labels: labels[index] };
+      });
+      allPosts.push(post_info);
+      console.log("here are the posts: ", allPosts);
     }
     return allPosts;
   }
 
-  // // add labels
-  // @Router.post("/labels")
-  // async addLabels(labels: String[]) {}
-
-  // // get all labels
-  // @Router.get("/labels")
-  // async getLabels() {}
-
-  // do not need friending concept
-
-  // @Router.get("/friends")
-  // async getFriends(session: SessionDoc) {
-  //   const user = Sessioning.getUser(session);
-  //   return await Authing.idsToUsernames(await Friending.getFriends(user));
-  // }
-
-  // @Router.delete("/friends/:friend")
-  // async removeFriend(session: SessionDoc, friend: string) {
-  //   const user = Sessioning.getUser(session);
-  //   const friendOid = (await Authing.getUserByUsername(friend))._id;
-  //   return await Friending.removeFriend(user, friendOid);
-  // }
-
-  // @Router.get("/friend/requests")
-  // async getRequests(session: SessionDoc) {
-  //   const user = Sessioning.getUser(session);
-  //   return await Responses.friendRequests(await Friending.getRequests(user));
-  // }
-
-  // @Router.post("/friend/requests/:to")
-  // async sendFriendRequest(session: SessionDoc, to: string) {
-  //   const user = Sessioning.getUser(session);
-  //   const toOid = (await Authing.getUserByUsername(to))._id;
-  //   return await Friending.sendRequest(user, toOid);
-  // }
-
-  // @Router.delete("/friend/requests/:to")
-  // async removeFriendRequest(session: SessionDoc, to: string) {
-  //   const user = Sessioning.getUser(session);
-  //   const toOid = (await Authing.getUserByUsername(to))._id;
-  //   return await Friending.removeRequest(user, toOid);
-  // }
-
-  // @Router.put("/friend/accept/:from")
-  // async acceptFriendRequest(session: SessionDoc, from: string) {
-  //   const user = Sessioning.getUser(session);
-  //   const fromOid = (await Authing.getUserByUsername(from))._id;
-  //   return await Friending.acceptRequest(fromOid, user);
-  // }
-
-  // @Router.put("/friend/reject/:from")
-  // async rejectFriendRequest(session: SessionDoc, from: string) {
-  //   const user = Sessioning.getUser(session);
-  //   const fromOid = (await Authing.getUserByUsername(from))._id;
-  //   return await Friending.rejectRequest(fromOid, user);
-  // }
-
-  // get all labels associated with topic
-  // @Router.get("/labels/:topic")
-  // async getTagsOnTopic(topic: String) {
-  //   // let posts: PostDoc[] = [];
-  //   // const controversialRating: Number = await DualViewing.getRating(topic);
-  //   // const TRESHOLD: Number = 0.7;
-  //   // if (controversialRating > TRESHOLD) {
-  //   //   const controversialContent = await DualViewing.getOpposingItems(topic);
-  //   //   const contentPosts = await Posting.getPostsSubset(controversialContent);
-  //   //   posts.concat(contentPosts);
-  //   // } else {
-  //   //   const labels = await DualViewing.getTagsForTopic(topic);
-  //   //   for (const label of labels) {
-  //   //     const contents = await Labeling.getItemsWithTag(label);
-  //   //     const contentPosts = await Posting.getPostsSubset(contents);
-  //   //     posts.concat(contentPosts);
-  //   //   }
-  //   // }
-  //   // select randomly keys
-  //   // select randomly corresponding opposing items
-  // }
+  @Router.get("/posts/download/:videoid")
+  async downloadVideo(videoid: string) {
+    console.log("the video id we are using: ", videoid, new ObjectId(videoid));
+    await Posting.posts.downloadVideo(new ObjectId(videoid), "test.mp4");
+    return { msg: "Downloaded successfully" };
+  }
 }
 
 /** The web app. */

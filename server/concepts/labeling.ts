@@ -45,7 +45,10 @@ export default class LabelingConcept {
     // find category
     const category = await this.findCategoryGemini(labels);
     // add all items with corresponding labels
+    console.log("returned closest category:", category);
+
     const labelIds = await this.addItemToLabels(labels, item);
+    console.log("returned ids: ", labelIds);
     // add labels to category
     await this.addLabelsForCategory(category, labelIds);
     return { msg: `Labels ${labels} successfully added!` };
@@ -56,9 +59,12 @@ export default class LabelingConcept {
   }
 
   async updateLabelsForItem(item: ObjectId, labels: string[]) {
+    console.log("updating labels: ", labels);
     const current_labels = await this.getLabelsForItem(item);
+    console.log("current labels: ", current_labels);
     const add_labels = labels.filter((label) => !current_labels.includes(label));
     const remove_labels = current_labels.filter((label) => !labels.includes(label));
+    console.log(`add labals ${add_labels} remove labels ${remove_labels}`);
     await this.addLabelsForItem(item, add_labels);
     await this.removeItemFromLabel(item, { label: { $in: remove_labels } });
     return { msg: "Labels successfully updated!" };
@@ -86,15 +92,18 @@ export default class LabelingConcept {
   async getOpposingItems(category: string): Promise<ObjectId[][]> {
     const oppositeItems: ObjectId[][] = [];
     const closestCategory = await this.getClosestExistingCategory(category);
-    assert(closestCategory in this.allowedCategories, `expected one of ${this.allowedCategories} but got category ${category}`);
+    assert(this.allowedCategories.includes(closestCategory), `expected one of ${this.allowedCategories} but got category ${category}`);
     const labels = await this.getLabelsInCategory(closestCategory);
+    console.log("the labels are: ", labels);
     const oppositeLabels = await this.getOppositeLabelPairs(labels, category);
+    console.log("the opposite label pairs are: ", labels);
     for (const [l1, l2] of oppositeLabels) {
       const items_l1 = await this.getItemsWithLabel(l1);
       const items_l2 = await this.getItemsWithLabel(l2);
       // TODO: somehow get unique
       for (let i = 0; i < Math.min(items_l1.length, items_l2.length); i++) {
         oppositeItems.push([items_l1[i], items_l2[i]]);
+        console.log("the opposite items: ", oppositeItems);
       }
     }
     return oppositeItems;
@@ -114,10 +123,13 @@ export default class LabelingConcept {
    * @returns all item ids with that label
    * @throws error if there are no items with a given tag
    */
-  private async getItemsWithLabel(label: string): Promise<ObjectId[]> {
+
+  async getItemsWithLabel(label: string): Promise<ObjectId[]> {
     const labelDocs = await this.labels.readMany({ label });
     if (labelDocs.length === 0) {
       throw new NotFoundError(`No items have label ${label}!`);
+    } else if (labelDocs.length === 1) {
+      return labelDocs[0].items;
     }
     const items = labelDocs.reduce((accumulator, curLabelDoc) => {
       return accumulator.concat(curLabelDoc.items);
@@ -132,7 +144,7 @@ export default class LabelingConcept {
    * @throws error if there are no labels in a given category, or category is not allowed
    */
   private async getLabelsInCategory(category: string): Promise<ObjectId[]> {
-    assert(category in this.allowedCategories, `expected one of ${this.allowedCategories} but got category ${category}`);
+    assert(this.allowedCategories.includes(category), `expected one of ${this.allowedCategories} but got category ${category}`);
     const categoryDocs = await this.categories.readMany({ category: category });
     if (categoryDocs.length === 0) {
       throw new NotFoundError(`No items are in category ${category}!`);
@@ -154,12 +166,14 @@ export default class LabelingConcept {
     for (const label of labels) {
       let labelDoc = await this.labels.readOne({ label });
       if (labelDoc === null) {
-        labelIds.concat(await this.labels.createOne({ label, items: [item] }));
+        labelIds.push(await this.labels.createOne({ label, items: [item] }));
       } else {
         labelIds.push(labelDoc._id);
         // await this.labels.partialUpdateOne({ label }, { items: labelDoc.items.concat([item]) });
         await this.labels.updateMany({ label }, { $addToSet: { items: item } });
       }
+      console.log("the doc: ", labelDoc);
+      console.log("updated label ids ", labelIds);
     }
     return labelIds;
   }
@@ -170,7 +184,8 @@ export default class LabelingConcept {
    * @param labelIds ids for the tags
    */
   private async addLabelsForCategory(category: string, labelIds: ObjectId[]) {
-    assert(category in this.allowedCategories, `expected one of ${this.allowedCategories} but got ${category}`);
+    console.log("here are the label ids", labelIds);
+    assert(this.allowedCategories.includes(category), `expected one of ${this.allowedCategories} but got ${category}`);
     let categoryDoc = await this.categories.readOne({ category });
     if (categoryDoc === null) {
       await this.categories.createOne({ category, labels: labelIds });
@@ -235,7 +250,7 @@ export default class LabelingConcept {
   }
 
   private async getLabelsValues(labels: ObjectId[]): Promise<string[]> {
-    return (await this.labels.readMany(labels)).map((labelDoc) => labelDoc.label);
+    return (await this.labels.readMany({ _id: { $in: labels } })).map((labelDoc) => labelDoc.label);
   }
 
   private getModelForLabelPairs(): GenerativeModel {
@@ -267,6 +282,7 @@ export default class LabelingConcept {
 
   private async getOppositeLabelPairs(labels: ObjectId[], category: string): Promise<string[][]> {
     const labelVaues = await this.getLabelsValues(labels);
+    console.log("label values", labelVaues);
     const model = this.getModelForLabelPairs();
     const result = await model.generateContent(`
       Given a list of labels enclosed in \`\`\` in category ${category}, 

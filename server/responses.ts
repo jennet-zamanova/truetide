@@ -32,7 +32,7 @@ export default class Responses {
    */
   static async postsWithvideos(posts: PostDoc[]) {
     const authors = await Authing.idsToUsernames(posts.map((post) => post.author));
-    const contents = await Posting.idsToVideos(posts.map((post) => post.content));
+    const contents = await Posting.idsToVideos(posts.map((post) => post._id));
     return posts.map((post, i) => ({ ...post, author: authors[i], videoContent: contents[i] }));
   }
 
