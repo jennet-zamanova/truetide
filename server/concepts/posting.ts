@@ -1,13 +1,8 @@
 import { ObjectId } from "mongodb";
 
-import { AssemblyAI } from "assemblyai";
 import DocCollection, { BaseDoc } from "../framework/doc";
 import { NotAllowedError, NotFoundError } from "./errors";
 import { deleteFromGemini, getFileManager, getModelForVideoToText, uploadToGemini } from "./utils";
-
-const client = new AssemblyAI({
-  apiKey: process.env.ASSEMBLYAI_API_KEY || "",
-});
 
 export interface PostOptions {
   backgroundColor?: string;
@@ -108,7 +103,6 @@ export default class PostingConcept {
    */
   async getContentText(_id: ObjectId) {
     const content = await this.posts.readOne({ _id });
-    // TODO: somehow get mp4
     if (content === null) {
       throw new NotFoundError(`Post ${_id} does not exist!`);
     }
@@ -137,28 +131,6 @@ export default class PostingConcept {
     ]);
     await deleteFromGemini(fileManager, file);
     return result.response.text();
-  }
-
-  // if decide to do
-  private async speechToText(audioFilePath: string): Promise<string> {
-    const params = {
-      audio: audioFilePath,
-      speaker_labels: true,
-    };
-    const transcript = await client.transcripts.transcribe(params);
-
-    if (transcript.status === "error") {
-      console.error(`Transcription failed: ${transcript.error}`);
-      process.exit(1);
-    }
-
-    console.log(transcript.text);
-    let text = "";
-    for (let utterance of transcript.utterances!) {
-      text += utterance.text;
-      // console.log(`Speaker ${utterance.speaker}: ${utterance.text}`); for debugging
-    }
-    return text;
   }
 
   async assertAuthorIsUser(_id: ObjectId, user: ObjectId) {

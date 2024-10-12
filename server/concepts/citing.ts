@@ -122,7 +122,6 @@ export default class CitingConcept {
     return { msg: "Citations deleted successfully!" };
   }
 
-  // TODO
   async update(item: ObjectId, citations: string[]) {
     let citationdoc = await this.citations.readOne({ item });
     if (citationdoc === null) {

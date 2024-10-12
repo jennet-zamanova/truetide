@@ -15,9 +15,6 @@ export interface LabelDoc extends BaseDoc {
   items: ObjectId[];
 }
 
-// Need to rework again: realized something may not work at all!
-/**WIP!!! */
-// TODO: add deleting functionality
 /**
  * concept: Labeling [Item, Categories]
  */
@@ -244,41 +241,4 @@ export default class LabelingConcept {
     // TODO would be useful in future
     return category;
   }
-
-  // could be good in future, but did not figure out thesaurus api
-  /**
-   * Find general field the labels belong to
-   * @param labels some words that can be part of a common category
-   * @returns category that these labels belong to
-   */
-  // private async findCategory(labels: string[]): Promise<string> {
-  //   // TODO: some NLP
-  //   const categories: Map<string, number> = new Map();
-  //   for (const label of labels) {
-  //     try {
-  //       const res = await thesaurus(label);
-  //       for (const topic of res.topics) {
-  //         const freq = categories.get(topic);
-  //         if (freq !== undefined) {
-  //           categories.set(topic, freq + 1);
-  //         } else {
-  //           categories.set(topic, 1);
-  //         }
-  //       }
-  //     } catch (err) {
-  //       console.error(err);
-  //     }
-  //   }
-
-  //   let mostFreqCategory: string = Object.keys(categories)[0];
-  //   let maxValue = -Infinity;
-
-  //   for (const [key, value] of Object.entries(categories)) {
-  //     if (value > maxValue) {
-  //       maxValue = value;
-  //       mostFreqCategory = key;
-  //     }
-  //   }
-  //   return mostFreqCategory;
-  // }
 }
