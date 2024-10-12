@@ -15,18 +15,6 @@ type Operation = {
  */
 const operations: Operation[] = [
   {
-    name: "donwload post",
-    endpoint: "/api/posts/download/:videoid",
-    method: "GET",
-    fields: { videoid: "input" },
-  },
-  {
-    name: "Get Suggested Citations",
-    endpoint: "/api/citations/suggestions",
-    method: "GET",
-    fields: { filePath: "input" },
-  },
-  {
     name: "Add Citations for Post",
     endpoint: "/api/posts/:postId/citations",
     method: "POST",
@@ -121,6 +109,18 @@ const operations: Operation[] = [
     endpoint: "/api/posts/:id",
     method: "DELETE",
     fields: { id: "input" },
+  },
+  {
+    name: "Get Suggested Citations (works only locally because could not get help)",
+    endpoint: "/api/citations/suggestions",
+    method: "GET",
+    fields: { fileURL: "input" },
+  },
+  {
+    name: "Get Suggested Citations When Ran locally (OPENAI performs way better, but I do not have money()",
+    endpoint: "/api/citations/localsuggestions",
+    method: "GET",
+    fields: { filePath: "input" },
   },
 ];
 

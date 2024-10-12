@@ -10,7 +10,7 @@ export interface PostOptions {
 
 export interface PostDoc extends BaseDoc {
   author: ObjectId;
-  content: ObjectId;
+  content: string;
   options?: PostOptions;
 }
 
@@ -27,8 +27,7 @@ export default class PostingConcept {
     this.posts = new DocCollection<PostDoc>(collectionName);
   }
 
-  async create(author: ObjectId, filePath: string, options?: PostOptions) {
-    const content = await this.posts.uploadVideo(filePath);
+  async create(author: ObjectId, content: string, options?: PostOptions) {
     const _id = await this.posts.createOne({ author, content, options });
     return { msg: "Post successfully created!", post: await this.posts.readOne({ _id }) };
   }
@@ -41,21 +40,6 @@ export default class PostingConcept {
   async getPost(_id: ObjectId) {
     // Returns specific post!
     return await this.posts.readOne({ _id });
-  }
-
-  async idsToVideos(ids: ObjectId[]) {
-    const posts = await this.posts.readMany({ _id: { $in: ids } });
-    // NOT SURE HOW TO DO WO DOWNLOADING THE VIDEO -> adding a screenshot feels like a lot of work for poc
-    // Store strings in Map because ObjectId comparison by reference is wrong
-    const videoIds: [string, string][] = await Promise.all(
-      posts.map(async (post) => {
-        const videoPath = post.content + "download.mp4";
-        await this.posts.downloadVideo(post.content, videoPath);
-        return [post._id.toString(), videoPath];
-      }),
-    );
-    const idToVideo = new Map(videoIds);
-    return ids.map((id) => idToVideo.get(id.toString()) ?? "DELETED_POST");
   }
 
   async getPostsSubset(ids: ObjectId[]): Promise<PostDoc[]> {
@@ -73,21 +57,13 @@ export default class PostingConcept {
   }
 
   async update(_id: ObjectId, content?: string, options?: PostOptions) {
-    if (content !== undefined) {
-      const content_id = await this.posts.uploadVideo(content);
-      await this.posts.partialUpdateOne({ _id }, { content: content_id, options });
-    } else {
-      await this.posts.partialUpdateOne({ _id }, { options });
-    }
+    await this.posts.partialUpdateOne({ _id }, { content, options });
     return { msg: "Post successfully updated!" };
   }
 
   async delete(_id: ObjectId) {
     const video_id = (await this.posts.readOne({ _id }))?.content;
     await this.posts.deleteOne({ _id });
-    if (video_id) {
-      await this.posts.deleteVideo(video_id);
-    }
     return { msg: "Post deleted successfully!" };
   }
 
@@ -97,22 +73,42 @@ export default class PostingConcept {
    * @returns the text that was spoken in the content
    */
   async getContentText(_id: ObjectId) {
-    const content = await this.posts.readOne({ _id });
-    if (content === null) {
+    const contentURL = await this.posts.readOne({ _id });
+    if (contentURL === null) {
       throw new NotFoundError(`Post ${_id} does not exist!`);
     }
-    const downloaded_file = await this.posts.downloadVideo(content.content, "uploaded_video.mp4");
-    // somehow get text
-    const text = this.getFileText(downloaded_file);
+    const text = this.getFileText(contentURL.content);
     return text;
   }
 
+  // TODO: DONT FORGET TO CHANGE
+  /**
+   * Extracts text out of video url
+   * @param file some video file
+   * @returns text spoken in the file
+   */
+  async getFileText(filePath: string): Promise<string> {
+    // TODO: learn how to deal with token limits
+    const model = getModelForVideoToText();
+    const fileManager = getFileManager();
+    const file = await uploadToGemini(fileManager, filePath);
+    const result = await model.generateContent([
+      {
+        fileData: {
+          mimeType: file.mimeType,
+          fileUri: file.uri,
+        },
+      },
+    ]);
+    await deleteFromGemini(fileManager, file);
+    return result.response.text();
+  }
   /**
    * Extracts text out of video file
    * @param file some video file
    * @returns text spoken in the file
    */
-  async getFileText(filePath: string): Promise<string> {
+  async getFileTextLocally(filePath: string): Promise<string> {
     // TODO: learn how to deal with token limits
     const model = getModelForVideoToText();
     const fileManager = getFileManager();

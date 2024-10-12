@@ -1,4 +1,4 @@
-import { Authing, Posting } from "./app";
+import { Authing } from "./app";
 import { PostAuthorNotMatchError, PostDoc } from "./concepts/posting";
 import { Router } from "./framework/router";
 
@@ -26,14 +26,14 @@ export default class Responses {
     return posts.map((post, i) => ({ ...post, author: authors[i] }));
   }
 
-  /**
-   * Same as {@link posts} but wih videos downloaded->probably bad
-   */
-  static async postsWithvideos(posts: PostDoc[]) {
-    const authors = await Authing.idsToUsernames(posts.map((post) => post.author));
-    const contents = await Posting.idsToVideos(posts.map((post) => post._id));
-    return posts.map((post, i) => ({ ...post, author: authors[i], videoContent: contents[i] }));
-  }
+  // /**
+  //  * Same as {@link posts} but wih videos downloaded->probably bad
+  //  */
+  // static async postsWithvideos(posts: PostDoc[]) {
+  //   const authors = await Authing.idsToUsernames(posts.map((post) => post.author));
+  //   const contents = await Posting.idsToVideos(posts.map((post) => post._id));
+  //   return posts.map((post, i) => ({ ...post, author: authors[i], videoContent: contents[i] }));
+  // }
 
   //   /**
   //    * Convert FriendRequestDoc into more readable format for the frontend
